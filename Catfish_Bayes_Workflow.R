@@ -22,7 +22,7 @@ cats%<>% mutate(LenCat=lencat(Length,w=10),
               Wr=Weight/Ws*100)
 cats<-filterD(cats, !is.na(Wr) & Wr>=50 & Wr<=150)
  
-cats$Discharge_cent<-(log10(cats$Discharge)-log10(mean(cats$Discharge)))/sd(log10(cats$Discharge))
+cats$Discharge_cent<-(log10(cats$Discharge)-(mean(log10(cats$Discharge))))/sd(log10(cats$Discharge))
 
 Summarize(Wr~Discharge, cats)
 boxplot(Wr~Discharge, cats)
@@ -39,17 +39,21 @@ boxplot(Wr~Discharge, cats)
 
 plot(Wr~(Discharge_cent), data=cats)
 
+cats$dis<-log10(cats$Discharge)-mean(log10(cats$Discharge))
+plot(Wr~dis, data=cats)
+
+
 N = 100  # number of simulations
 
 # simulate priors
 priors <- tibble(a = rnorm(N, 4, .25),
-                 b = rnorm(N,1, .1),
-                 shape = rexp(N, .05), # for brms
-                 scale = rexp(N, 2), # for rethinking
+                 b = rnorm(N,0, 1),
+                 shape = rexp(N, .05),# for brms
+                 scale = rexp(N, 0.5), # for Rethinking
                  sim = 1:N)
 
 # data (only the x values, since we're simulating y and mu and pretending we don't have them yet)
-x <- rnorm(100, 1500,500)
+x <- rnorm(N, 1500,500)
 
 # combine and simulate
 prior_and_x <- priors %>% expand_grid(x = x) %>%    # combine priors and x's
@@ -67,13 +71,14 @@ prior_and_x %>%
   NULL
 
 # fit with brms (NOTE: rethinking and brms use different parameterizations for gamma)
-gamma_brm <- brm(Wr ~ Discharge_cent, 
+gamma_brm <- brm(Wr ~ log10(Discharge), 
                  family = Gamma(link = "log"),
                  data = cats,
                  prior = c(prior(normal(4,.25), class = "Intercept"),
-                           prior(normal(1, .1), class = "b"),
+                           prior(normal(0, 1), class = "b"),
                            prior(exponential(.05), class = "shape")),
-                 cores = 4, chains = 1, iter = 1000)
+                 cores = 4, chains = 1, iter = 1000,
+                 file="gamma_brm.rds")
 
 summary(gamma_brm)
 plot(gamma_brm)
@@ -146,6 +151,7 @@ gomp<-90*exp(-exp(-7*(Dc-3604)))
 lines(cats$Discharge,gomp, col="blue")
 
 library(FSA)
+vbFuns()
 gomp1 <- GompertzFuns(msg=TRUE)
 (vbs <- GompertzStarts(Wr~Dc,type="Typical",plot=F))
 vbf <- nls(mean~vb(AGE,Linf,K,t0),data=Mean)
